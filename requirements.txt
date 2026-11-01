@@ -1,0 +1,8 @@
+# Runtime dependencies of agent-credential-platform.
+# Install the package itself, including the dev extra, with:
+#   pip install -e ".[dev]"
+# The lines below mirror [project.dependencies] in pyproject.toml.
+fastapi>=0.115
+mcp>=2,<3
+pydantic>=2
+uvicorn>=0.32
