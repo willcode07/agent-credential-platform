@@ -1,103 +1,107 @@
-"""Smoke tests for the rule matcher."""
+"""Smoke tests for the requirement-driven matcher. No market is assumed."""
 
 import pytest
 from pydantic import ValidationError
 
-from acp.matching.matcher import match_students, match_teachers
-from acp.matching.profiles import Opening, SchoolProgram, StudentProfile, TeacherProfile
+from acp.matching.matcher import match_candidates
+from acp.matching.profiles import Candidate, ClaimRequirement, Opportunity
 
 
-def _teacher(**overrides: object) -> TeacherProfile:
-    data: dict[str, object] = {
-        "id": "teacher-ada",
-        "display_name": "Ada Okonkwo",
-        "subjects": ["Mathematics"],
-        "grade_min": 9,
-        "grade_max": 12,
-        "mode": "in_person",
-        "location": "Springfield",
-        "license_active": True,
-    }
-    data.update(overrides)
-    return TeacherProfile.model_validate(data)
+def _candidate(candidate_id: str, **claims: object) -> Candidate:
+    return Candidate(id=candidate_id, display_name=candidate_id, claims=dict(claims))
 
 
-def _opening(**overrides: object) -> Opening:
-    data: dict[str, object] = {
-        "id": "math-9-12",
-        "subject": "Mathematics",
-        "grade_min": 9,
-        "grade_max": 12,
-        "mode": "in_person",
-        "location": "Springfield",
-        "requires_license": True,
-    }
-    data.update(overrides)
-    return Opening.model_validate(data)
+def _role(*requirements: ClaimRequirement, opportunity_id: str = "role-1") -> Opportunity:
+    return Opportunity(id=opportunity_id, name="Role", requirements=list(requirements))
 
 
-def _student(**overrides: object) -> StudentProfile:
-    data: dict[str, object] = {
-        "id": "student-priya",
-        "display_name": "Priya Shah",
-        "grade_level": 10,
-        "interests": ["Mathematics"],
-        "mode": "in_person",
-        "location": "Springfield",
-    }
-    data.update(overrides)
-    return StudentProfile.model_validate(data)
-
-
-def test_licensed_teacher_matches_opening() -> None:
-    matches = match_teachers(_opening(), [_teacher()])
-    assert len(matches) == 1
-    assert matches[0].candidate_id == "teacher-ada"
-    assert matches[0].score == 100
-    assert "active license disclosed" in matches[0].reasons
-
-
-def test_expired_license_is_excluded_when_required() -> None:
-    matches = match_teachers(_opening(), [_teacher(id="teacher-ben", license_active=False)])
-    assert matches == []
-
-
-def test_wrong_subject_is_excluded() -> None:
-    matches = match_teachers(_opening(), [_teacher(subjects=["Biology"])])
-    assert matches == []
-
-
-def test_in_person_requires_the_same_place() -> None:
-    matches = match_teachers(_opening(), [_teacher(location="Shelbyville")])
-    assert matches == []
-
-
-def test_remote_pair_ignores_city() -> None:
-    opening = _opening(mode="remote", location="Springfield", requires_license=False)
-    teacher = _teacher(mode="remote", location="Capital City", license_active=False)
-    matches = match_teachers(opening, [teacher])
-    assert len(matches) == 1
-    assert matches[0].score == 80
-
-
-def test_hybrid_opening_accepts_in_person_teacher() -> None:
-    matches = match_teachers(_opening(mode="hybrid"), [_teacher()])
-    assert len(matches) == 1
-
-
-def test_student_outside_grade_band_is_excluded() -> None:
-    program = SchoolProgram(
-        id="math-9-12",
-        subject="Mathematics",
-        grade_min=9,
-        grade_max=12,
-        mode="in_person",
-        location="Springfield",
+def test_required_claim_must_match_and_weights_sum() -> None:
+    opportunity = _role(
+        ClaimRequirement(
+            claim="skill",
+            op="equals",
+            value="welding",
+            weight=50,
+            label="skill matches",
+        ),
+        ClaimRequirement(
+            claim="clearance",
+            op="equals",
+            value="active",
+            weight=20,
+            required=False,
+            label="clearance disclosed",
+        ),
     )
-    matches = match_students(program, [_student(), _student(id="student-leo", grade_level=4)])
-    assert [item.candidate_id for item in matches] == ["student-priya"]
+    matches = match_candidates(
+        opportunity,
+        [
+            _candidate("ada", skill="welding", clearance="active"),
+            _candidate("ben", skill="welding", clearance="expired"),
+            _candidate("cara", skill="painting", clearance="active"),
+        ],
+    )
+    assert [(item.candidate_id, item.score) for item in matches] == [("ada", 70), ("ben", 50)]
+    assert matches[0].reasons == ["skill matches", "clearance disclosed"]
+    assert matches[0].opportunity_id == "role-1"
 
 
-def test_grade_band_must_be_ordered() -> None:
+def test_missing_required_claim_excludes_the_candidate() -> None:
+    opportunity = _role(
+        ClaimRequirement(
+            claim="skill",
+            op="contains",
+            value="welding",
+            weight=10,
+            label="has skill",
+        ),
+    )
+    matches = match_candidates(opportunity, [_candidate("ada", skill=["Welding"])])
+    assert len(matches) == 1
+    assert match_candidates(opportunity, [_candidate("ben", skill=["painting"])]) == []
+    assert match_candidates(opportunity, [_candidate("cara")]) == []
+
+
+def test_range_and_overlap_are_inclusive() -> None:
+    opportunity = _role(
+        ClaimRequirement(
+            claim="level",
+            op="in_range",
+            value=[9, 12],
+            weight=20,
+            label="level in range",
+        ),
+        ClaimRequirement(
+            claim="span",
+            op="overlaps",
+            value=[9, 12],
+            weight=20,
+            label="span overlaps",
+        ),
+    )
+    inside = _candidate("ada", level=10, span=[8, 9])
+    outside = _candidate("ben", level=4, span=[1, 3])
+    matches = match_candidates(opportunity, [inside, outside])
+    assert [item.candidate_id for item in matches] == ["ada"]
+
+
+def test_one_of_and_tie_break_on_id() -> None:
+    opportunity = _role(
+        ClaimRequirement(claim="site", op="one_of", value=["remote", "anywhere"], weight=10),
+    )
+    matches = match_candidates(
+        opportunity,
+        [_candidate("b", site="remote"), _candidate("a", site="anywhere")],
+    )
+    assert [item.candidate_id for item in matches] == ["a", "b"]
+
+
+def test_present_and_invalid_requirement_shape() -> None:
+    opportunity = _role(
+        ClaimRequirement(claim="skill", op="present", weight=1, label="skill present"),
+    )
+    assert len(match_candidates(opportunity, [_candidate("ada", skill="any")])) == 1
     with pytest.raises(ValidationError):
-        _teacher(grade_min=12, grade_max=9)
+        ClaimRequirement(claim="level", op="in_range", value=[12, 9])
+    with pytest.raises(ValidationError):
+        ClaimRequirement(claim="site", op="one_of", value="remote")

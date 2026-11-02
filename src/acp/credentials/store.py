@@ -1,8 +1,8 @@
 """In-memory credential store shared by the demo and the MCP server.
 
 # OPEN QUESTION: where do credentials live in production (holder wallet,
-# school-operated store, or a split), and how long is a disclosure retained
-# after a match task completes?
+# counterparty-operated store, or a split), and how long is a disclosure
+# retained after a match task completes?
 """
 
 from acp.credentials.models import VerifiableCredential

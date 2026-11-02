@@ -37,7 +37,7 @@ SSE is the older HTTP transport and is not used here.
 
 ## A2A — agent collaboration
 
-A2A (Agent2Agent) is how a school agent discovers the matcher and gives it
+A2A (Agent2Agent) is how a counterparty discovers the matcher and gives it
 work. The placeholder follows the **1.0.0** specification published at
 <https://a2a-protocol.org/latest/specification/> (same text as
 `a2aproject/A2A` on the `v1.0.1` / `main` docs at the time of writing).
@@ -119,9 +119,10 @@ The prover/verifier in `src/acp/credentials/zkp.py` is a sketch:
   credential."
 * **SD-JWT** puts a salted hash of each claim in a signed JWT and lets the
   holder open some of them. Easier to deploy, weaker unlinkability.
-* **zk-SNARK / circom** proves a predicate (a grade band, a threshold)
-  without revealing the number. Heavier, and a different product question
-  than claim disclosure.
+* **zk-SNARK / circom** proves a predicate (a threshold, a range) without
+  revealing the number. Heavier, and a different product question than
+  claim disclosure. The education example reveals a grade instead of
+  proving one.
 
 The mock returns revealed claims plus a SHA-256 commitment of the hidden
 ones. It is not bound to an issuer key. The verifier checks the issuer

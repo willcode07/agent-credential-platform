@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     mcp_cmd.add_argument("--host", default="127.0.0.1")
     mcp_cmd.add_argument("--port", type=int, default=8001)
 
-    sub.add_parser("demo", help="Run the school / teacher / student matching demo")
+    sub.add_parser("demo", help="Run the education example (schools, teachers, students)")
 
     args = parser.parse_args(argv)
     if args.command == "serve":

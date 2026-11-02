@@ -10,7 +10,7 @@ import json
 from mcp import Client
 
 from acp.protocols.mcp.server import build_server
-from acp.samples import ADA_HOME_ADDRESS, TEACHER_ADA
+from acp.verticals.education import ADA_HOME_ADDRESS, TEACHER_ADA
 
 
 def test_list_and_disclose_do_not_return_hidden_claims() -> None:

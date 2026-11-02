@@ -4,9 +4,9 @@ A production resolver would fetch a DID document (for example ``did:web``
 or ``did:key``) and return verification methods the ZKP verifier can use.
 This mock never touches the network.
 
-# OPEN QUESTION: which DID methods are in scope for the school launch
-# (``did:web``, ``did:key``, ``did:ion``, something else), and which issuer
-# DIDs are trusted for a teaching license?
+# OPEN QUESTION: which DID methods are in scope (``did:web``, ``did:key``,
+# ``did:ion``, something else), and which issuer DIDs are trusted for which
+# credential types? Each market supplies its own issuer list.
 """
 
 from abc import ABC, abstractmethod

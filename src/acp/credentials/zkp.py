@@ -20,13 +20,13 @@ How the three families we are choosing among actually work:
   not unlinkable in the same way.
 * zk-SNARK circuits (often written in circom and proved with groth16 or
   similar) can prove a *predicate*, such as ``years_experience >= 5`` or
-  ``grade_level`` is inside a band, without revealing the value. They cost
+  a value inside a band, without revealing the value. They cost
   a circuit, a trusted setup or a transparent alternative, and a much
   larger implementation.
 
-# OPEN QUESTION: which scheme is the launch default? Claim disclosure
-# (BBS+ or SD-JWT) and predicate proofs (SNARK) answer different product
-# questions, and a school match may need both.
+# OPEN QUESTION: which scheme is the default? Claim disclosure (BBS+ or
+# SD-JWT) and predicate proofs (SNARK) answer different product questions,
+# and a market may need both.
 """
 
 import hashlib

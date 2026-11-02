@@ -12,7 +12,7 @@ The handler records a task and completes it immediately. It does not call
 the matcher; the demo submits a finished summary as the user message.
 
 # OPEN QUESTION: tasks are stored in process memory. What is the retention
-# and tenancy model once more than one school shares an agent?
+# and tenancy model once more than one counterparty shares an agent?
 """
 
 from collections import OrderedDict

@@ -18,7 +18,6 @@ from mcp.server import MCPServer
 from acp.credentials.store import CredentialNotFoundError, CredentialStore
 from acp.credentials.zkp import SelectiveDisclosureProver
 from acp.protocols.base import ProtocolAdapter
-from acp.samples import launch_store
 
 
 class MCPAdapter(ProtocolAdapter):
@@ -38,9 +37,16 @@ class MCPAdapter(ProtocolAdapter):
 def build_server(store: CredentialStore | None = None) -> MCPServer:
     """Create a credential-store MCP server.
 
-    Pass ``store`` in tests. The default store is the launch-market sample.
+    Pass ``store`` in tests. The default data is the education example so
+    ``acp mcp`` has credentials to disclose. It is not part of the core model.
     """
-    credential_store = store if store is not None else launch_store()
+    if store is None:
+        # Imported lazily so the education example can import this module.
+        from acp.verticals.education import education_store
+
+        credential_store = education_store()
+    else:
+        credential_store = store
     server = MCPServer(
         "acp-credential-store",
         instructions=(

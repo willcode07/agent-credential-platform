@@ -3,16 +3,25 @@
 A hybrid AI agent platform for privacy-preserving credential verification
 and matching.
 
-The first market is schools, teachers, and students: a school needs a
-licensed teacher for a subject and grade band, and students need a program
-that fits the grade and interests they are willing to disclose. Enterprise
-HR and executive screening is a later market. It can reuse the protocol
-adapters, but not the school matching rules, until someone writes that
-policy down.
+Holders disclose selected claims from verifiable credentials. A counterparty
+describes an opportunity as claim requirements. The matcher ranks candidates
+from revealed claims only. It does not know which industry those claims come
+from.
 
 This repository is a scaffold. The selective-disclosure code is a sketch
 with the shape of a real presentation, not a proof. Do not gate access to
 anything real on it.
+
+## Markets
+
+Education is the launch wedge: match schools, teachers, and students from
+claims they are willing to show. That vertical is a worked example
+([examples/school_match_demo.py](examples/school_match_demo.py),
+`acp.verticals.education`), not the data model.
+
+Enterprise HR and executive screening is a later market. It would bring its
+own opportunities and claim requirements. The matcher, credential types, and
+protocol adapters stay the same.
 
 ## Protocols
 
@@ -23,8 +32,8 @@ anything real on it.
 | ANP / DIDs | Long-term discovery on an open network, with DIDs as agent identity. | Adapter seam only. Both A2A and ANP are meant to sit behind the same interface. |
 | DID + VC + selective disclosure | Show a claim without handing over the credential. | Pydantic VC models, a DID resolver interface, and notes on BBS+, SD-JWT, and zk-SNARK/circom. |
 
-MCP keeps raw credentials off the agent-to-agent wire. A2A is how a school
-agent finds the matcher and records a task. ANP is the direction for
+MCP keeps raw credentials off the agent-to-agent wire. A2A is how a
+counterparty finds the matcher and records a task. ANP is the direction for
 decentralized identity once the card-and-task flow is not enough. Details
 and the spec points that were checked are in [docs/protocols.md](docs/protocols.md).
 
@@ -32,28 +41,31 @@ and the spec points that were checked are in [docs/protocols.md](docs/protocols.
 
 ```mermaid
 flowchart LR
-  subgraph holders [Holder side]
-    TeacherAgent[Teacher agent]
-    StudentAgent[Student agent]
+  subgraph holderSide [Holder side]
+    HolderAgent[Holder agent]
   end
-  subgraph schoolSide [School side]
-    SchoolAgent[School agent]
+  subgraph counterpartySide [Counterparty side]
+    Counterparty[Counterparty agent]
   end
   subgraph acp [Agent Credential Platform]
     Card["Agent Card"]
     Tasks[A2A tasks]
     Store[MCP credential store]
-    Match[Rule matcher]
+    Match[Requirement matcher]
   end
-  TeacherAgent -->|disclose claims| Store
-  StudentAgent -->|disclose claims| Store
+  HolderAgent -->|disclose claims| Store
   Store -->|revealed claims only| Match
-  SchoolAgent -->|discover and assign a task| Card
+  Counterparty -->|discover and assign a task| Card
   Card --- Tasks
   Tasks --> Match
 ```
 
-A longer version, including the ANP seam, is in [docs/architecture.md](docs/architecture.md).
+Issuers sign credentials. Holders choose what to reveal. A verifier checks
+the disclosure. Candidates are holders reduced to revealed claims.
+Opportunities are configurable requirements. A longer version, including the
+ANP seam and the education example, is in
+[docs/architecture.md](docs/architecture.md).
+
 Choices that need a person are marked in code with `# OPEN QUESTION:` and
 listed in [docs/open-questions.md](docs/open-questions.md).
 
@@ -68,7 +80,8 @@ src/acp/
   protocols/a2a/         Agent Card and task handler
   protocols/anp/         DID projection stub
   credentials/           VC models, DID resolver, disclosure sketch
-  matching/              Teacher, School, Student profiles and matcher
+  matching/              Candidate, Opportunity, requirement matcher
+  verticals/education.py schools / teachers / students example
 examples/school_match_demo.py
 tests/
 docs/
@@ -85,16 +98,16 @@ pip install -e ".[dev]"
 acp demo
 ```
 
-The demo issues sample teaching-license and enrollment credentials, discloses
-a subset of the claims, ranks teachers and students for North High, and
-stores the summary as a completed A2A task. Home addresses, dates of birth,
-and student numbers stay in the credentials.
+The demo runs the education example: sample teaching-license and enrollment
+credentials, a disclosure, then the generic matcher against North High's
+requirements. Home addresses, dates of birth, and student numbers stay in
+the credentials.
 
 Other entry points:
 
 ```bash
 acp serve          # http://127.0.0.1:8000/.well-known/agent-card.json
-acp mcp            # credential store on stdio, for an MCP host
+acp mcp            # credential store on stdio, seeded with the education example
 acp mcp --transport streamable-http --port 8001
 pytest
 ruff check .
