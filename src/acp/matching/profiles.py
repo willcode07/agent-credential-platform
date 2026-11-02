@@ -1,92 +1,90 @@
-"""Launch-market profiles.
+"""Domain-generic profiles for credential matching.
 
-These are the attributes a matcher is allowed to see after selective
-disclosure. They are not the underlying credentials.
+A market (education, hiring, anything else) maps its revealed claims onto
+these types. The matcher does not know what a claim means.
 
-# OPEN QUESTION: the grade scale is a US-style 1–12 integer. Other school
-# systems, and a later HR product, need a different notion of "level."
+Roles elsewhere in the platform:
+
+* **Issuer** — the DID in ``VerifiableCredential.issuer``.
+* **Holder** — the credential subject (``holder_did``). Chooses what to reveal.
+* **Verifier** — ``SelectiveDisclosureVerifier``, which checks a disclosure
+  before a ``Candidate`` is built.
+* **Candidate** — a holder reduced to revealed claims.
+* **Opportunity** — a counterparty's configurable claim requirements.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Mode = Literal["in_person", "remote", "hybrid"]
+RequirementOp = Literal["equals", "one_of", "contains", "in_range", "overlaps", "present"]
 
 
-def _check_grade_band(grade_min: int, grade_max: int) -> None:
-    if not 1 <= grade_min <= 12 or not 1 <= grade_max <= 12:
-        raise ValueError("grades must be between 1 and 12")
-    if grade_min > grade_max:
-        raise ValueError("grade_min cannot exceed grade_max")
+class ClaimRequirement(BaseModel):
+    """One check against a revealed claim.
 
+    ``required`` drops the candidate when the check fails. ``weight`` is added
+    to the score when the check passes. ``label`` is the reason text.
+    """
 
-class TeacherProfile(BaseModel):
-    """A teacher as presented to the matcher. Built from revealed claims."""
-
-    id: str
-    display_name: str
-    subjects: list[str] = Field(min_length=1)
-    grade_min: int
-    grade_max: int
-    mode: Mode
-    location: str
-    license_active: bool
+    claim: str
+    op: RequirementOp
+    value: Any = None
+    required: bool = True
+    weight: int = Field(default=10, ge=0)
+    label: str | None = None
 
     @model_validator(mode="after")
-    def grades_in_range(self) -> "TeacherProfile":
-        _check_grade_band(self.grade_min, self.grade_max)
+    def value_matches_op(self) -> "ClaimRequirement":
+        if self.op == "present":
+            return self
+        if self.value is None:
+            raise ValueError(f"{self.op} requires a value")
+        if self.op == "one_of" and not isinstance(self.value, list):
+            raise ValueError("one_of requires a list value")
+        if self.op in {"in_range", "overlaps"} and _bounds(self.value) is None:
+            raise ValueError(f"{self.op} requires a [min, max] value")
         return self
 
 
-class StudentProfile(BaseModel):
-    """A student as presented to the matcher. Built from revealed claims."""
+class Candidate(BaseModel):
+    """A holder as presented to the matcher. ``claims`` are revealed claims only."""
 
     id: str
     display_name: str
-    grade_level: int = Field(ge=1, le=12)
-    interests: list[str] = Field(min_length=1)
-    mode: Mode
-    location: str
+    claims: dict[str, Any] = Field(default_factory=dict)
 
 
-class SchoolProgram(BaseModel):
-    """Something a school offers students, such as a subject in a grade band."""
+class Opportunity(BaseModel):
+    """Something a counterparty wants filled, described as claim requirements.
 
-    id: str
-    subject: str
-    grade_min: int
-    grade_max: int
-    mode: Mode
-    location: str
-
-    @model_validator(mode="after")
-    def grades_in_range(self) -> "SchoolProgram":
-        _check_grade_band(self.grade_min, self.grade_max)
-        return self
-
-
-class Opening(SchoolProgram):
-    """A staffing need. Same shape as a program, plus a license rule."""
-
-    requires_license: bool = True
-
-
-class SchoolProfile(BaseModel):
-    """A school and the openings and programs it wants matched."""
+    ``credential_type`` names which credential type a rule pack accepts for
+    this opportunity. The matcher itself does not read it.
+    """
 
     id: str
     name: str
-    location: str
-    openings: list[Opening]
-    programs: list[SchoolProgram]
+    credential_type: str | None = None
+    requirements: list[ClaimRequirement] = Field(default_factory=list)
 
 
 class Match(BaseModel):
-    """One scored pairing. ``score`` is an explanatory rank, not a probability."""
+    """One scored pairing. ``score`` is the sum of passed weights, not a probability."""
 
     candidate_id: str
-    candidate_role: Literal["teacher", "student"]
-    target_id: str
+    opportunity_id: str
     score: int
     reasons: list[str]
+
+
+def _bounds(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, list) or len(value) != 2:
+        return None
+    try:
+        low = float(value[0])
+        high = float(value[1])
+    except (TypeError, ValueError):
+        return None
+    if low > high:
+        return None
+    return low, high

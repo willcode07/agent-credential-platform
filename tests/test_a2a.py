@@ -7,7 +7,7 @@ from acp.protocols.a2a.card import RETIRED_AGENT_CARD_PATH
 from acp.protocols.a2a.tasks import TaskService, handle_jsonrpc
 
 
-def _message(text: str = "Find a math teacher") -> dict:
+def _message(text: str = "Rank disclosed candidates") -> dict:
     return {
         "jsonrpc": "2.0",
         "id": 1,
@@ -34,7 +34,8 @@ def test_agent_card_is_served_at_the_current_well_known_path() -> None:
     assert interface["protocolVersion"] == "1.0"
     assert interface["url"] == "http://127.0.0.1:8000/a2a/v1"
     assert card["capabilities"]["streaming"] is False
-    assert {skill["id"] for skill in card["skills"]} == {"match-teachers", "match-students"}
+    assert {skill["id"] for skill in card["skills"]} == {"match-candidates", "verify-disclosure"}
+    assert "school" not in card["description"].lower()
     retired = client.get(RETIRED_AGENT_CARD_PATH)
     assert retired.status_code == 404
 
@@ -47,7 +48,8 @@ def test_send_get_and_list_task_round_trip() -> None:
     task = body["result"]["task"]
     assert body["id"] == 1
     assert task["status"]["state"] == "TASK_STATE_COMPLETED"
-    assert task["artifacts"][0]["parts"][0]["text"] == "Find a math teacher"
+    assert task["artifacts"][0]["parts"][0]["text"] == "Rank disclosed candidates"
+    assert task["metadata"] == {"tenantId": "platform", "rulePackId": "unspecified"}
 
     fetched = client.post(
         "/a2a/v1",

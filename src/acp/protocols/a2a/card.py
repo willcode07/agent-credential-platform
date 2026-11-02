@@ -31,9 +31,10 @@ def build_agent_card(base_url: str) -> dict[str, object]:
     return {
         "name": "ACP Matching Agent",
         "description": (
-            "Matches schools, teachers, and students from selectively disclosed "
+            "Matches candidates to opportunities from selectively disclosed "
             "credentials. Private claim stores stay on MCP; this card is the A2A "
-            "collaboration surface."
+            "collaboration surface. Markets such as education or hiring supply "
+            "their own claim requirements."
         ),
         "supportedInterfaces": [
             {
@@ -57,21 +58,28 @@ def build_agent_card(base_url: str) -> dict[str, object]:
         "defaultOutputModes": ["text/plain", "application/json"],
         "skills": [
             {
-                "id": "match-teachers",
-                "name": "Match teachers to an opening",
+                "id": "match-candidates",
+                "name": "Match candidates to an opportunity",
                 "description": (
-                    "Rank teachers for a school opening using revealed license, "
-                    "subject, grade band, and mode claims."
+                    "Rank holders against an opportunity's claim requirements. "
+                    "Only revealed claims are visible to the matcher."
                 ),
-                "tags": ["matching", "education", "credentials"],
-                "examples": ["Find a licensed mathematics teacher for grades 9-12 in Springfield."],
+                "tags": ["matching", "credentials"],
+                "examples": [
+                    "Which disclosed candidates satisfy this opportunity's requirements?"
+                ],
             },
             {
-                "id": "match-students",
-                "name": "Match students to a program",
-                "description": "Rank students whose disclosed grade and interests fit a program.",
-                "tags": ["matching", "education"],
-                "examples": ["Which disclosed students fit the grade 9-12 mathematics program?"],
+                "id": "verify-disclosure",
+                "name": "Check a selective disclosure",
+                "description": (
+                    "Check that a disclosure names a trusted issuer. "
+                    "This build's check is a mock, not a cryptographic proof."
+                ),
+                "tags": ["credentials", "disclosure"],
+                "examples": [
+                    "Which claims does this disclosure reveal, and is the issuer trusted?"
+                ],
             },
         ],
     }

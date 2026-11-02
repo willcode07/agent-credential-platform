@@ -11,8 +11,10 @@ Field names are camelCase and task states use the proto enum strings
 The handler records a task and completes it immediately. It does not call
 the matcher; the demo submits a finished summary as the user message.
 
-# OPEN QUESTION: tasks are stored in process memory. What is the retention
-# and tenancy model once more than one school shares an agent?
+Every task is stamped with ``tenantId`` and ``rulePackId``. There is one
+matching agent; counterparties share it and are separated by those fields.
+
+# OPEN QUESTION: which durable store replaces this process-local dict?
 """
 
 from collections import OrderedDict
@@ -47,9 +49,16 @@ _UNIMPLEMENTED = {
 
 
 class TaskService:
-    """In-memory tasks for one process."""
+    """In-memory tasks for the one matching agent."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        tenant_id: str = "platform",
+        rule_pack_id: str = "unspecified",
+    ) -> None:
+        self.tenant_id = tenant_id
+        self.rule_pack_id = rule_pack_id
         self._tasks: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
     def send_message(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +88,8 @@ class TaskService:
             "name": "result",
             "parts": [{"text": summary}],
         }
+        supplied = params.get("metadata")
+        metadata = supplied if isinstance(supplied, dict) else {}
         task = {
             "id": task_id,
             "contextId": context_id,
@@ -89,6 +100,10 @@ class TaskService:
             },
             "artifacts": [artifact],
             "history": [user_message, agent_message],
+            "metadata": {
+                "tenantId": str(metadata.get("tenantId") or self.tenant_id),
+                "rulePackId": str(metadata.get("rulePackId") or self.rule_pack_id),
+            },
         }
         self._tasks[task_id] = task
         return {"task": task}
