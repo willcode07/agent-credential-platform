@@ -27,9 +27,12 @@ The 2.x line removes the old import. This repo depends on `mcp>=2,<3` and
 uses `MCPServer`. The placeholder registers:
 
 * `list_credentials(holder_did)` — ids and types only
-* `disclose_claims(credential_id, reveal)` — mock selective disclosure
-* resource `credential://{credential_id}` — full credential, meant as a
-  stand-in for the holder's own agent
+* `disclose_claims(credential_id, reveal)` — SD-JWT selective disclosure.
+  This is the only way a counterparty receives claim values.
+* `read_credential(credential_id, holder_proof="")` — the full credential.
+  Denied unless `holder_proof` is the holder's proof. The mock proof is the
+  literal `holder:<did>`. A missing or wrong proof is rejected, so the
+  default is deny. There is no unauthenticated resource.
 
 `acp mcp` defaults to stdio, which is how local MCP hosts start a server.
 `--transport streamable-http` matches the SDK's current HTTP transport.
@@ -92,19 +95,30 @@ publishes a JSON Agent Description (`protocolType` `ANP`, `type`
 `AgentDescription`). Authentication is the DID flow from ANP-02; that text
 names `did:wba` and native `did:web`. Sample documents set
 `protocolVersion` to `1.0.0` while the document revision is 1.2. This
-scaffold does not choose between those version strings and does not emit an
-Agent Description.
+scaffold emits `protocolVersion` `1.0.0` on the derived description and does
+not sign it.
 
-A2A identifies an agent with an Agent Card instead. `ANPAdapter.project_did`
-returns a stub that points a DID at the A2A card path and marks itself
-`not_implemented`. `MockDIDResolver` satisfies the `DIDResolver` interface
-offline for `did:example` identifiers. No ANP document is parsed and no DID
-method is fetched.
+Decided Nov 2, 2026: there is one matching agent, and the A2A Agent Card is
+the source of truth. `ANPAdapter.project_card` builds an unsigned Agent
+Description from that card (`status` `derived_stub`, `sourceOfTruth`
+`a2a-agent-card`). `project_did` does not resolve the DID.
 
-Supporting both means keeping the adapter boundary: matching and disclosure
-do not import A2A or ANP types. A later ANP adapter can project its
-description into the same Agent Card builder, or the reverse, once a human
-picks which document is canonical.
+The resolver interface (`DIDMethodResolver`, still importable as
+`MockDIDResolver`) supports three methods and does not fetch the network:
+
+* `did:key` is decoded offline from the multibase identifier into a
+  verification method (`Ed25519VerificationKey2020` when the multicodec
+  prefix is ed25519-pub).
+* `did:web` and `did:wba` only compute the HTTPS document URL
+  (`did:web:example.com` and `did:wba:example.com` both point at
+  `https://example.com/.well-known/did.json`). A document is returned only
+  if it was cached with `register`.
+* `did:example` remains a local sample stand-in, not a production method.
+
+Trusted issuers are not hard-coded in the resolver. A rule pack lists them
+per credential type.
+
+Matching and disclosure do not import A2A or ANP types.
 
 ## Credentials: DID, VC, selective disclosure
 
@@ -112,18 +126,25 @@ Credentials are a small pydantic reading of W3C Verifiable Credentials 2.0:
 `@context` of `https://www.w3.org/ns/credentials/v2`, `type`, `issuer`,
 `validFrom`, `credentialSubject`. There is no proof block and no status list.
 
-The prover/verifier in `src/acp/credentials/zkp.py` is a sketch:
+Decided Nov 2, 2026: SD-JWT is the default disclosure scheme. The interface
+in `src/acp/credentials/disclosure.py` is pluggable. `src/acp/credentials/zkp.py`
+re-exports it so older imports keep working.
 
-* **BBS+** signs a list of messages and lets the holder derive an unlinkable
-  proof of a subset. Closest match for "reveal these claims from a signed
-  credential."
-* **SD-JWT** puts a salted hash of each claim in a signed JWT and lets the
-  holder open some of them. Easier to deploy, weaker unlinkability.
-* **zk-SNARK / circom** proves a predicate (a threshold, a range) without
-  revealing the number. Heavier, and a different product question than
-  claim disclosure. The education example reveals a grade instead of
-  proving one.
+* **SD-JWT** (`src/acp/credentials/sdjwt.py`) is implemented with the
+  standard library. A disclosure is base64url(JSON `[salt, name, value]`).
+  Its digest is base64url(SHA-256 of that ASCII disclosure string). The
+  issuer JWT lists every digest in `_sd`, sets `_sd_alg` to `sha-256`, and
+  does not contain claim values. The presentation is
+  `issuer-jwt~disclosure~` with a trailing `~` and no key-binding JWT. The
+  signature is HS256 under a process-wide development key, not an issuer
+  DID key. Issuance and presentation both happen inside `disclose_claims`.
+* **BBS+** is a documented stub. It would derive an unlinkable proof of a
+  subset of signed messages. Calling it raises `NotImplementedError`.
+* **zk-SNARK / circom** is a documented stub for a predicate (a threshold
+  or a range) that does not reveal the number. Calling it raises
+  `NotImplementedError`. The education pack reveals a grade instead.
 
-The mock returns revealed claims plus a SHA-256 commitment of the hidden
-ones. It is not bound to an issuer key. The verifier checks the issuer
-allow-list and the shape of the envelope only.
+The verifier checks the development-key signature, that each disclosure
+digest is in `_sd`, that the opened claims match the proof object, and that
+the issuer is in the trusted set the caller passes in. That set comes from
+the rule pack for the credential type.

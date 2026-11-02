@@ -56,10 +56,15 @@ class Candidate(BaseModel):
 
 
 class Opportunity(BaseModel):
-    """Something a counterparty wants filled, described as claim requirements."""
+    """Something a counterparty wants filled, described as claim requirements.
+
+    ``credential_type`` names which credential type a rule pack accepts for
+    this opportunity. The matcher itself does not read it.
+    """
 
     id: str
     name: str
+    credential_type: str | None = None
     requirements: list[ClaimRequirement] = Field(default_factory=list)
 
 

@@ -49,6 +49,7 @@ def test_send_get_and_list_task_round_trip() -> None:
     assert body["id"] == 1
     assert task["status"]["state"] == "TASK_STATE_COMPLETED"
     assert task["artifacts"][0]["parts"][0]["text"] == "Rank disclosed candidates"
+    assert task["metadata"] == {"tenantId": "platform", "rulePackId": "unspecified"}
 
     fetched = client.post(
         "/a2a/v1",

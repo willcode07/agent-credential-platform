@@ -4,10 +4,8 @@ A required check that fails drops the candidate. The score is the sum of the
 weights of checks that passed. There is no learning and no fuzzy comparison.
 
 # OPEN QUESTION: equals, one_of, contains, in_range, overlaps, and present
-# are a stand-in for a policy language. A market may instead need a predicate
-# that is proved without revealing the value.
-# OPEN QUESTION: which claims a counterparty may require is a per-market
-# policy. This matcher does not know the market.
+# are a stand-in for a policy language. A predicate proved without revealing
+# the value would be the zk-SNARK scheme, which is a stub.
 """
 
 from typing import Any

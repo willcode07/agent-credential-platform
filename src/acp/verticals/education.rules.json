@@ -1,0 +1,85 @@
+{
+  "id": "education",
+  "tenant_id": "example-tenant",
+  "retention_days": 30,
+  "credential_types": {
+    "TeachingLicense": {
+      "trusted_issuers": ["did:example:state-board"]
+    },
+    "StudentEnrollment": {
+      "trusted_issuers": ["did:example:north-high"]
+    }
+  },
+  "opportunities": [
+    {
+      "id": "math-teacher-9-12",
+      "name": "Mathematics teacher, grades 9-12, in person in Springfield",
+      "credential_type": "TeachingLicense",
+      "requirements": [
+        {
+          "claim": "subjects",
+          "op": "contains",
+          "value": "Mathematics",
+          "weight": 50,
+          "required": true,
+          "label": "teaches Mathematics"
+        },
+        {
+          "claim": "grade_band",
+          "op": "overlaps",
+          "value": [9, 12],
+          "weight": 20,
+          "required": true,
+          "label": "grade band overlaps"
+        },
+        {
+          "claim": "license_status",
+          "op": "equals",
+          "value": "active",
+          "weight": 20,
+          "required": true,
+          "label": "active license disclosed"
+        },
+        {
+          "claim": "placement",
+          "op": "one_of",
+          "value": ["in_person:springfield", "anywhere"],
+          "weight": 10,
+          "required": true,
+          "label": "mode and location compatible"
+        }
+      ]
+    },
+    {
+      "id": "math-program-9-12",
+      "name": "Mathematics program, grades 9-12, in person in Springfield",
+      "credential_type": "StudentEnrollment",
+      "requirements": [
+        {
+          "claim": "interests",
+          "op": "contains",
+          "value": "Mathematics",
+          "weight": 50,
+          "required": true,
+          "label": "interest in Mathematics"
+        },
+        {
+          "claim": "grade_level",
+          "op": "in_range",
+          "value": [9, 12],
+          "weight": 20,
+          "required": true,
+          "label": "grade level inside the program"
+        },
+        {
+          "claim": "placement",
+          "op": "one_of",
+          "value": ["in_person:springfield", "anywhere"],
+          "weight": 10,
+          "required": true,
+          "label": "mode and location compatible"
+        }
+      ]
+    }
+  ]
+}

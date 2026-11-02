@@ -4,23 +4,24 @@ Schools, teachers, and students are mapped onto ``Candidate`` and
 ``Opportunity``. Grade bands, licenses, and classrooms are claim names in
 this file. The matcher never sees those words.
 
-# OPEN QUESTION: claim names such as ``grade_band`` and ``license_status``
-# are this vertical's choice. Other school systems, and other markets, pick
-# their own names and requirements.
+# Claim names such as ``grade_band`` and ``license_status`` belong to this
+# pack. Other markets pick their own names in their own rule pack.
 """
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from acp.credentials.did import DIDDocument, MockDIDResolver
 from acp.credentials.models import VerifiableCredential
 from acp.credentials.store import CredentialStore
 from acp.credentials.zkp import SelectiveDisclosureProver, SelectiveDisclosureVerifier
 from acp.matching.matcher import match_candidates
-from acp.matching.profiles import Candidate, ClaimRequirement, Match, Opportunity
+from acp.matching.profiles import Candidate, Match, Opportunity
 from acp.protocols.a2a.tasks import TaskService
 from acp.protocols.anp.adapter import ANPAdapter
 from acp.protocols.mcp.server import MCPAdapter
+from acp.rules.pack import RulePack, load_rule_pack
 
 STATE_BOARD = "did:example:state-board"
 NORTH_HIGH_DID = "did:example:north-high"
@@ -161,80 +162,39 @@ def education_credentials() -> list[VerifiableCredential]:
     ]
 
 
+def education_pack() -> RulePack:
+    """The education market. Requirements and trusted issuers live in JSON."""
+    return load_rule_pack(Path(__file__).with_name("education.rules.json"))
+
+
 def education_store() -> CredentialStore:
+    pack = education_pack()
     store = CredentialStore()
     for credential in education_credentials():
-        store.put(credential)
+        store.put(
+            credential,
+            tenant_id=pack.tenant_id,
+            rule_pack_id=pack.id,
+            retention_days=pack.retention_days,
+        )
     return store
 
 
 def math_teacher_opening() -> Opportunity:
-    """North High's staffing need, written as generic claim requirements."""
-    return Opportunity(
-        id="math-teacher-9-12",
-        name="Mathematics teacher, grades 9-12, in person in Springfield",
-        requirements=[
-            ClaimRequirement(
-                claim="subjects",
-                op="contains",
-                value="Mathematics",
-                weight=50,
-                label="teaches Mathematics",
-            ),
-            ClaimRequirement(
-                claim="grade_band",
-                op="overlaps",
-                value=[9, 12],
-                weight=20,
-                label="grade band overlaps",
-            ),
-            ClaimRequirement(
-                claim="license_status",
-                op="equals",
-                value="active",
-                weight=20,
-                label="active license disclosed",
-            ),
-            ClaimRequirement(
-                claim="placement",
-                op="one_of",
-                value=["in_person:springfield", "anywhere"],
-                weight=10,
-                label="mode and location compatible",
-            ),
-        ],
-    )
+    """North High's staffing need, loaded from the education rule pack."""
+    return education_pack().opportunity("math-teacher-9-12")
 
 
 def math_student_program() -> Opportunity:
-    """North High's student program, written as generic claim requirements."""
-    return Opportunity(
-        id="math-program-9-12",
-        name="Mathematics program, grades 9-12, in person in Springfield",
-        requirements=[
-            ClaimRequirement(
-                claim="interests",
-                op="contains",
-                value="Mathematics",
-                weight=50,
-                label="interest in Mathematics",
-            ),
-            ClaimRequirement(
-                claim="grade_level",
-                op="in_range",
-                value=[9, 12],
-                weight=20,
-                label="grade level inside the program",
-            ),
-            ClaimRequirement(
-                claim="placement",
-                op="one_of",
-                value=["in_person:springfield", "anywhere"],
-                weight=10,
-                label="mode and location compatible",
-            ),
-        ],
-    )
+    """North High's student program, loaded from the education rule pack."""
+    return education_pack().opportunity("math-program-9-12")
+
+
+def credential_type_name(credential: VerifiableCredential) -> str:
+    for name in credential.type:
+        if name != "VerifiableCredential":
+            return name
+    raise ValueError(f"{credential.id} has no credential type")
 
 
 def candidate_from_revealed(profile_id: str, revealed: dict) -> Candidate:
@@ -251,6 +211,13 @@ def candidate_from_revealed(profile_id: str, revealed: dict) -> Candidate:
         claims["placement"] = _placement(str(claims["mode"]), str(claims["location"]))
     display_name = str(claims.get("preferred_name", profile_id))
     return Candidate(id=profile_id, display_name=display_name, claims=claims)
+
+
+def _require_trusted(verifier, credential, proof, pack: RulePack) -> None:
+    trusted = set(pack.trusted_issuers(credential_type_name(credential)))
+    result = verifier.verify(proof, trusted_issuers=trusted)
+    if not result.ok:
+        raise RuntimeError(result.reason)
 
 
 def _placement(mode: str, location: str) -> str:
@@ -279,10 +246,10 @@ class DemoReport:
 
 def run_demo() -> DemoReport:
     """Disclose, map onto generic types, match, and record an A2A task."""
+    pack = education_pack()
     credentials = {item.id: item for item in education_credentials()}
     prover = SelectiveDisclosureProver()
     verifier = SelectiveDisclosureVerifier()
-    trusted = {STATE_BOARD, NORTH_HIGH_DID}
 
     resolver = MockDIDResolver()
     resolver.register(
@@ -296,9 +263,7 @@ def run_demo() -> DemoReport:
         ("vc-license-ben", "teacher-ben"),
     ):
         proof = prover.prove(credentials[credential_id], TEACHER_REVEAL)
-        result = verifier.verify(proof, trusted_issuers=trusted)
-        if not result.ok:
-            raise RuntimeError(result.reason)
+        _require_trusted(verifier, credentials[credential_id], proof, pack)
         teachers.append(candidate_from_revealed(profile_id, proof.revealed))
 
     students: list[Candidate] = []
@@ -307,9 +272,7 @@ def run_demo() -> DemoReport:
         ("vc-enrollment-leo", "student-leo"),
     ):
         proof = prover.prove(credentials[credential_id], STUDENT_REVEAL)
-        result = verifier.verify(proof, trusted_issuers=trusted)
-        if not result.ok:
-            raise RuntimeError(result.reason)
+        _require_trusted(verifier, credentials[credential_id], proof, pack)
         students.append(candidate_from_revealed(profile_id, proof.revealed))
 
     opening = math_teacher_opening()
@@ -326,7 +289,10 @@ def run_demo() -> DemoReport:
         student_matches,
     )
 
-    task_response = TaskService().send_message(
+    task_response = TaskService(
+        tenant_id=pack.tenant_id,
+        rule_pack_id=pack.id,
+    ).send_message(
         {
             "message": {
                 "messageId": "msg-demo-match",

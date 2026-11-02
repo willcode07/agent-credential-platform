@@ -2,6 +2,7 @@
 
 from acp.cli import main
 from acp.demo import report_blob, run_demo
+from acp.protocols.a2a.card import build_agent_card
 from acp.protocols.anp.adapter import ANPAdapter
 
 
@@ -14,12 +15,20 @@ def test_demo_matches_ada_and_priya_and_hides_canaries() -> None:
         assert secret not in blob
     assert "not matched" in report.text
     assert report.task["status"]["state"] == "TASK_STATE_COMPLETED"
+    assert report.task["metadata"]["tenantId"] == "example-tenant"
+    assert report.task["metadata"]["rulePackId"] == "education"
 
 
-def test_anp_projection_is_a_stub() -> None:
-    projected = ANPAdapter().project_did("did:example:state-board")
-    assert projected["status"] == "not_implemented"
-    assert projected["agentCardPath"] == "/.well-known/agent-card.json"
+def test_anp_description_is_derived_from_the_agent_card() -> None:
+    card = build_agent_card("https://matcher.example")
+    projected = ANPAdapter().project_card(card)
+    assert projected["sourceOfTruth"] == "a2a-agent-card"
+    assert projected["status"] == "derived_stub"
+    assert projected["protocolType"] == "ANP"
+    assert projected["name"] == card["name"]
+    assert projected["url"] == "https://matcher.example/a2a/v1"
+    pointed = ANPAdapter().project_did("did:example:state-board")
+    assert pointed["sourceOfTruth"] == "a2a-agent-card"
 
 
 def test_cli_demo(capsys) -> None:

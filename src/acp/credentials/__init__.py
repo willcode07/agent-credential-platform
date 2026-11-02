@@ -1,1 +1,4 @@
-"""Verifiable credentials, DID resolution, and a selective-disclosure sketch."""
+"""Verifiable credentials, DID resolution, and selective disclosure.
+
+SD-JWT is the default disclosure scheme. BBS+ and zk-SNARK predicates are stubs.
+"""
